@@ -8,7 +8,6 @@ from streamlit_js_eval import get_geolocation
 # --- CONFIGURAÇÕES DE SEGURANÇA ---
 URL = os.getenv("SUPABASE_URL")
 KEY = os.getenv("SUPABASE_KEY")
-# No Render, defina como "LIGADO" para testar em casa ou "DESLIGADO" para o evento
 MODO_TESTE = os.getenv("MODO_TESTE", "DESLIGADO")
 
 if URL and KEY:
@@ -19,12 +18,12 @@ else:
 # --- COORDENADAS UNICEPLAC (GAMA) ---
 LAT_FACULDADE = -16.00122196328053
 LON_FACULDADE = -48.05097423558202
-RAIO_PERMITIDO_KM = 0.5  # 500 metros de tolerância
+RAIO_PERMITIDO_KM = 0.5
 
 
 # --- FUNÇÕES AUXILIARES ---
 def calcular_distancia(lat1, lon1, lat2, lon2):
-    R = 6371  # Raio da Terra em KM
+    R = 6371
     dLat = math.radians(lat2 - lat1)
     dLon = math.radians(lon2 - lon1)
     a = (
@@ -56,87 +55,86 @@ SEMESTRES = [f"{i}º Semestre" for i in range(1, 9)]
 st.set_page_config(page_title="Check-in Codeplac", page_icon="💻", layout="centered")
 
 st.markdown(
-    f"""
+    """
     <style>
-    .stApp {{ background-color: #000b17; }}
-    #MainMenu, footer, header {{visibility: hidden;}}
-    [data-testid="stForm"] {{
+    .stApp { background-color: #000b17; }
+    #MainMenu, footer, header { visibility: hidden; }
+    
+    .formulario-card-box {
         background: rgba(13, 25, 33, 0.4);
         backdrop-filter: blur(15px);
-        border: 2px solid #00EAFF;
-        border-radius: 25px;
-        padding: 30px;
-        box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
-    }}
-    h1, h2, h3, p, label, .stMarkdown {{ color: #fff !important; font-family: 'Inter', sans-serif; }}
-    label p {{ color: #00d4ff !important; font-weight: bold !important; letter-spacing: 1px; }}
-    input, .stSelectbox div[data-baseweb="select"] {{
-        background-color: rgba(0, 20, 30, 0.6) !important;
+        border: 1px solid rgba(0, 234, 255, 0.3);
+        border-radius: 20px;
+        padding: 40px;
+    }
+    
+    h1 { color: #00EAFF !important; text-align: center; letter-spacing: 2px; }
+    
+    /* Estilizando o formulário do Streamlit para combinar */
+    [data-testid="stForm"] {
+        background: transparent !important;
+        border: none !important;
+    }
+    
+    input, .stSelectbox div[data-baseweb="select"] {
+        background: rgba(0, 20, 30, 0.6) !important;
         border: 1px solid #1a4a5a !important;
-        color: white !important;
-        border-radius: 10px !important;
-    }}
-    button[kind="primaryFormSubmit"] {{
-        background: #00d4ff !important;
-        color: #000 !important;
+        color: #fff !important;
+        border-radius: 8px !important;
+    }
+    
+    button[kind="primaryFormSubmit"] {
+        background: transparent !important;
+        border: 1px solid #00EAFF !important;
+        color: #00EAFF !important;
         border-radius: 50px !important;
-        padding: 10px 40px !important;
-        font-weight: bold !important;
+        text-transform: uppercase;
+        font-weight: bold;
         width: 100%;
-        box-shadow: 0 0 15px rgba(0, 212, 255, 0.4) !important;
-    }}
-    .title-underline {{
-        height: 2px;
-        background: linear-gradient(90deg, transparent, #00d4ff, transparent);
-        margin-bottom: 20px;
-    }}
+    }
+    
+    button[kind="primaryFormSubmit"]:hover {
+        background: #00EAFF !important;
+        color: #000b17 !important;
+        box-shadow: 0 0 20px rgba(0, 234, 255, 0.4);
+    }
     </style>
-    """,
+""",
     unsafe_allow_html=True,
 )
 
-st.markdown(
-    "<h1 style='text-align: center; letter-spacing: 2px;'>REGISTRO DE PRESENÇA</h1>",
-    unsafe_allow_html=True,
-)
-st.markdown("<div class='title-underline'></div>", unsafe_allow_html=True)
+# Wrapper Principal
+st.markdown("<div class='formulario-card-box'>", unsafe_allow_html=True)
+st.markdown("<h1>REGISTRO DE PRESENÇA</h1>", unsafe_allow_html=True)
 
-# --- LÓGICA DE GEOLOCALIZAÇÃO OBRIGATÓRIA ---
+# --- LÓGICA DE GEOLOCALIZAÇÃO ---
 if MODO_TESTE == "DESLIGADO":
-    st.markdown(
-        "<p style='text-align: center; color: #00d4ff;'>📍 Verificando localização para liberar acesso...</p>",
-        unsafe_allow_html=True,
-    )
     loc = get_geolocation()
-
     if not loc:
-        st.warning(
-            "Aguardando permissão de GPS. Se o navegador não perguntar, clique no cadeado ao lado da URL e permita a localização."
-        )
+        st.warning("Aguardando permissão de GPS...")
         if st.button("🔄 TENTAR NOVAMENTE"):
             st.rerun()
-        st.stop()  # Bloqueia o formulário
+        st.stop()
 
-    # Se capturou a localização
-    lat_aluno = loc["coords"]["latitude"]
-    lon_aluno = loc["coords"]["longitude"]
-    distancia = calcular_distancia(lat_aluno, lon_aluno, LAT_FACULDADE, LON_FACULDADE)
+    distancia = calcular_distancia(
+        loc["coords"]["latitude"],
+        loc["coords"]["longitude"],
+        LAT_FACULDADE,
+        LON_FACULDADE,
+    )
 
     if distancia > RAIO_PERMITIDO_KM:
-        st.error(f"❌ Acesso Negado. Você está a {distancia:.2f} km da faculdade.")
-        st.info("Para registrar presença, você deve estar fisicamente no Uniceplac.")
-        st.stop()  # Bloqueia o formulário
+        st.error(
+            f"❌ Você precisa ir até o local do evento para marcar sua presença :) (Distância: {distancia:.2f} km)"
+        )
+        st.stop()
     else:
-        st.success("✅ Localização confirmada! Formulário liberado.")
+        st.success("✅ Localização confirmada!")
 
-else:
-    st.info("🛠️ Modo Teste Ativado: Localização ignorada.")
-
-# --- FORMULÁRIO DE REGISTRO ---
+# --- FORMULÁRIO ---
 with st.form("form_registro", clear_on_submit=True):
     nome = st.text_input("NOME COMPLETO")
     cpf_input = st.text_input("CPF (APENAS OS 11 NÚMEROS)", max_chars=11)
-
     col1, col2 = st.columns(2)
     with col1:
         curso = st.selectbox("CURSO", CURSOS)
@@ -145,15 +143,12 @@ with st.form("form_registro", clear_on_submit=True):
         semestre = st.selectbox("SEMESTRE", SEMESTRES)
         turma = st.text_input("TURMA (OPCIONAL)")
 
-    botao = st.form_submit_button("REGISTRAR PRESENÇA")
-
-    if botao:
+    if st.form_submit_button("REGISTRAR PRESENÇA"):
         cpf_limpo = formatar_cpf(cpf_input)
-
         if not nome or not cpf_input:
             st.warning("Por favor, preencha o Nome e o CPF!")
         elif not cpf_limpo:
-            st.error("CPF Inválido! Digite exatamente os 11 números.")
+            st.error("CPF Inválido!")
         else:
             try:
                 dados = {
@@ -165,10 +160,9 @@ with st.form("form_registro", clear_on_submit=True):
                     "periodo": periodo,
                 }
                 supabase.table("presencas").insert(dados).execute()
-                st.success(f"Tudo certo, {nome.split()[0]}! Presença registrada.")
+                st.success(f"Tudo certo, {nome.split()[0]}!")
                 st.balloons()
             except Exception as e:
-                if "unique_cpf_dia_tech" in str(e) or "23505" in str(e):
-                    st.error("⚠️ Você já registrou presença hoje!")
-                else:
-                    st.error(f"Erro no sistema: {e}")
+                st.error("⚠️ Você já registrou presença hoje!")
+
+st.markdown("</div>", unsafe_allow_html=True)  # Fecha card-box
