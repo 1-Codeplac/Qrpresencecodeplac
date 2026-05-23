@@ -6,7 +6,7 @@ import math
 import json
 from streamlit_js_eval import get_geolocation
 
-# --- CONFIGURAÇÕES DE SEGURANÇA ---
+# --- CONFIGURAÇÕES ---
 URL = os.getenv("SUPABASE_URL")
 KEY = os.getenv("SUPABASE_KEY")
 MODO_TESTE = os.getenv("MODO_TESTE", "DESLIGADO")
@@ -14,15 +14,14 @@ MODO_TESTE = os.getenv("MODO_TESTE", "DESLIGADO")
 if URL and KEY:
     supabase = create_client(URL, KEY)
 else:
-    st.error("Erro: Chaves de API não configuradas no ambiente.")
+    st.error("Erro: Chaves de API não configuradas.")
 
-# --- COORDENADAS UNICEPLAC (GAMA) ---
 LAT_FACULDADE = -16.00122196328053
 LON_FACULDADE = -48.05097423558202
 RAIO_PERMITIDO_KM = 0.5
 
 
-# --- FUNÇÕES AUXILIARES ---
+# --- FUNÇÕES ---
 def calcular_distancia(lat1, lon1, lat2, lon2):
     R = 6371
     dLat = math.radians(lat2 - lat1)
@@ -39,104 +38,74 @@ def calcular_distancia(lat1, lon1, lat2, lon2):
 
 def formatar_cpf(cpf_bruto):
     numeros = re.sub(r"\D", "", cpf_bruto)
-    if len(numeros) != 11:
-        return None
-    return f"{numeros[:3]}.{numeros[3:6]}.{numeros[6:9]}-{numeros[9:]}"
+    return (
+        f"{numeros[:3]}.{numeros[3:6]}.{numeros[6:9]}-{numeros[9:]}"
+        if len(numeros) == 11
+        else None
+    )
 
 
 def buscar_e_organizar_dados():
     response = supabase.table("presencas").select("*").execute()
-    dados = response.data
+    dados = response.data or []
     relatorio = {}
     for item in dados:
-        chave = f"{item.get('curso', 'N/A')} - {item.get('periodo', 'N/A')} {item.get('semestre', 'N/A')}"  # type: ignore
+        chave = f"{item.get('curso', 'N/A')} - {item.get('periodo', 'N/A')} {item.get('semestre', 'N/A')}" #type: ignore
         if chave not in relatorio:
             relatorio[chave] = []
-        relatorio[chave].append(item.get("nome_completo", "Sem Nome"))  # type: ignore
+        relatorio[chave].append(item.get("nome_completo", "Sem Nome")) #type: ignore
     for chave in relatorio:
         relatorio[chave].sort()
     return relatorio
 
 
-CURSOS = [
-    "Análise e Desenvolvimento de Sistemas",
-    "Ciência da Computação",
-    "Engenharia de Software",
-    "Gestão de Tecnologia da Informação",
-]
-SEMESTRES = [f"{i}º Semestre" for i in range(1, 9)]
-
-# --- INTERFACE E ESTILIZAÇÃO ---
+# --- INTERFACE ---
 st.set_page_config(page_title="Check-in Codeplac", page_icon="💻", layout="centered")
 
 st.markdown(
     """
     <style>
     .stApp { background-color: #000b17; }
-    #MainMenu, footer, header { visibility: hidden; }
-    .formulario-card-box {
-        background: rgba(13, 25, 33, 0.4);
-        backdrop-filter: blur(15px);
-        border: 1px solid rgba(0, 234, 255, 0.3);
-        border-radius: 20px;
-        padding: 40px;
-    }
+    .formulario-card-box { background: rgba(13, 25, 33, 0.4); backdrop-filter: blur(15px); border: 1px solid rgba(0, 234, 255, 0.3); border-radius: 20px; padding: 40px; }
     h1 { color: #00EAFF !important; text-align: center; letter-spacing: 2px; }
-    [data-testid="stForm"] { background: transparent !important; border: none !important; }
-    input, .stSelectbox div[data-baseweb="select"] {
-        background: rgba(0, 20, 30, 0.6) !important;
-        border: 1px solid #1a4a5a !important;
-        color: #fff !important;
-        border-radius: 8px !important;
-    }
-    button[kind="primaryFormSubmit"] {
-        background: transparent !important;
-        border: 1px solid #00EAFF !important;
-        color: #00EAFF !important;
-        border-radius: 50px !important;
-        text-transform: uppercase;
-        font-weight: bold;
-        width: 100%;
-    }
-    button[kind="primaryFormSubmit"]:hover {
-        background: #00EAFF !important;
-        color: #000b17 !important;
-        box-shadow: 0 0 20px rgba(0, 234, 255, 0.4);
-    }
+    button[kind="primaryFormSubmit"] { background: transparent !important; border: 1px solid #00EAFF !important; color: #00EAFF !important; border-radius: 50px !important; width: 100%; font-weight: bold; }
     </style>
 """,
     unsafe_allow_html=True,
 )
 
-# --- LÓGICA DE ROTA ---
-query_params = st.query_params
-is_admin = query_params.get("admin") == "akyparfaitcoisas"
-
 st.markdown("<div class='formulario-card-box'>", unsafe_allow_html=True)
 
-if is_admin:
+# --- LÓGICA DE ROTA ADMIN ---
+query_params = st.query_params
+if query_params.get("admin") == "akyparfaitcoisas":
     st.title("🔒 Painel Administrativo")
-    senha = st.text_input("Senha", type="password")
-    if senha == "SUA_SENHA_AQUI":
+    if st.text_input("Senha", type="password") == "logoeuqueamavameucavalo":
         if st.button("Gerar Relatório JSON"):
-            dados_organizados = buscar_e_organizar_dados()
-            json_str = json.dumps(dados_organizados, indent=4, ensure_ascii=False)
+            dados = buscar_e_organizar_dados()
             st.download_button(
-                "Baixar presencas.json", json_str, "presencas.json", "application/json"
+                "Baixar JSON",
+                json.dumps(dados, indent=4, ensure_ascii=False),
+                "presencas.json",
+                "application/json",
             )
-            st.json(dados_organizados)
+            st.json(dados)
     else:
-        st.warning("Senha incorreta.")
+        st.warning("Acesso restrito.")
 else:
     # --- PÁGINA DO ALUNO ---
     st.markdown("<h1>REGISTRO DE PRESENÇA</h1>", unsafe_allow_html=True)
     if MODO_TESTE == "DESLIGADO":
         loc = get_geolocation()
-        if not loc:
-            st.warning("Aguardando permissão de GPS...")
+        # Verificação segura: checa se loc existe e se contém a chave 'coords'
+        if not loc or "coords" not in loc:
+            st.warning(
+                "Não foi possível conseguir sua localização, ative e tente novamente."
+            )
             if st.button("🔄 TENTAR NOVAMENTE"):
                 st.rerun()
             st.stop()
+
         distancia = calcular_distancia(
             loc["coords"]["latitude"],
             loc["coords"]["longitude"],
@@ -145,7 +114,7 @@ else:
         )
         if distancia > RAIO_PERMITIDO_KM:
             st.error(
-                f"❌ Você precisa ir até o local do evento para marcar sua presença :) (Distância: {distancia:.2f} km)"
+                f"❌ Você precisa estar no local do evento. (Distância: {distancia:.2f} km)"
             )
             st.stop()
         else:
@@ -156,30 +125,37 @@ else:
         cpf_input = st.text_input("CPF (APENAS OS 11 NÚMEROS)", max_chars=11)
         col1, col2 = st.columns(2)
         with col1:
-            curso = st.selectbox("CURSO", CURSOS)
+            curso = st.selectbox(
+                "CURSO",
+                [
+                    "Análise e Desenvolvimento de Sistemas",
+                    "Ciência da Computação",
+                    "Engenharia de Software",
+                    "Gestão de Tecnologia da Informação",
+                ],
+            )
             periodo = st.selectbox("PERÍODO", ["Matutino", "Noturno"])
         with col2:
-            semestre = st.selectbox("SEMESTRE", SEMESTRES)
+            semestre = st.selectbox("SEMESTRE", [f"{i}º Semestre" for i in range(1, 9)])
             turma = st.text_input("TURMA (OPCIONAL)")
 
         if st.form_submit_button("REGISTRAR PRESENÇA"):
             cpf_limpo = formatar_cpf(cpf_input)
-            if not nome or not cpf_input:
-                st.warning("Por favor, preencha o Nome e o CPF!")
-            elif not cpf_limpo:
-                st.error("CPF Inválido!")
+            if not nome or not cpf_limpo:
+                st.warning("Preencha todos os campos corretamente!")
             else:
                 try:
-                    dados = {
-                        "nome_completo": nome.strip().upper(),
-                        "cpf": cpf_limpo,
-                        "curso": curso,
-                        "semestre": semestre,
-                        "turma": turma.strip().upper() if turma else "N/A",
-                        "periodo": periodo,
-                    }
-                    supabase.table("presencas").insert(dados).execute()
-                    st.success(f"Tudo certo, {nome.split()[0]}!")
+                    supabase.table("presencas").insert(
+                        {
+                            "nome_completo": nome.strip().upper(),
+                            "cpf": cpf_limpo,
+                            "curso": curso,
+                            "semestre": semestre,
+                            "turma": turma.strip().upper() if turma else "N/A",
+                            "periodo": periodo,
+                        }
+                    ).execute()
+                    st.success("Tudo certo!")
                     st.balloons()
                 except Exception:
                     st.error("⚠️ Você já registrou presença hoje!")
