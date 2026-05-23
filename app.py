@@ -4,6 +4,7 @@ import os
 import re
 import math
 import json
+import unicodedata
 from streamlit_js_eval import get_geolocation
 
 # --- CONFIGURAÇÕES ---
@@ -50,12 +51,19 @@ def buscar_e_organizar_dados():
     dados = response.data or []
     relatorio = {}
     for item in dados:
-        chave = f"{item.get('curso', 'N/A')} - {item.get('periodo', 'N/A')} {item.get('semestre', 'N/A')}" #type: ignore
+        chave = f"{item.get('curso', 'N/A')} - {item.get('periodo', 'N/A')} {item.get('semestre', 'N/A')}"  # type: ignore
         if chave not in relatorio:
             relatorio[chave] = []
-        relatorio[chave].append(item.get("nome_completo", "Sem Nome")) #type: ignore
+        relatorio[chave].append(item.get("nome_completo", "Sem Nome"))  # type: ignore
+
     for chave in relatorio:
-        relatorio[chave].sort()
+        # Ordenação que ignora acentos
+        relatorio[chave].sort(
+            key=lambda x: unicodedata.normalize("NFKD", x)
+            .encode("ASCII", "ignore")
+            .decode("utf-8")
+            .lower()
+        )
     return relatorio
 
 
@@ -97,7 +105,6 @@ else:
     st.markdown("<h1>REGISTRO DE PRESENÇA</h1>", unsafe_allow_html=True)
     if MODO_TESTE == "DESLIGADO":
         loc = get_geolocation()
-        # Verificação segura: checa se loc existe e se contém a chave 'coords'
         if not loc or "coords" not in loc:
             st.warning(
                 "Não foi possível conseguir sua localização, ative e tente novamente."
