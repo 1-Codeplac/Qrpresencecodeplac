@@ -3,6 +3,7 @@ from supabase import create_client
 import os
 import re
 import math
+import json
 from streamlit_js_eval import get_geolocation
 
 # --- CONFIGURAÇÕES DE SEGURANÇA ---
@@ -43,6 +44,20 @@ def formatar_cpf(cpf_bruto):
     return f"{numeros[:3]}.{numeros[3:6]}.{numeros[6:9]}-{numeros[9:]}"
 
 
+def buscar_e_organizar_dados():
+    response = supabase.table("presencas").select("*").execute()
+    dados = response.data
+    relatorio = {}
+    for item in dados:
+        chave = f"{item.get('curso', 'N/A')} - {item.get('periodo', 'N/A')} {item.get('semestre', 'N/A')}"  # type: ignore
+        if chave not in relatorio:
+            relatorio[chave] = []
+        relatorio[chave].append(item.get("nome_completo", "Sem Nome"))  # type: ignore
+    for chave in relatorio:
+        relatorio[chave].sort()
+    return relatorio
+
+
 CURSOS = [
     "Análise e Desenvolvimento de Sistemas",
     "Ciência da Computação",
@@ -51,7 +66,7 @@ CURSOS = [
 ]
 SEMESTRES = [f"{i}º Semestre" for i in range(1, 9)]
 
-# --- INTERFACE E ESTILIZAÇÃO CODEPLAC ---
+# --- INTERFACE E ESTILIZAÇÃO ---
 st.set_page_config(page_title="Check-in Codeplac", page_icon="💻", layout="centered")
 
 st.markdown(
@@ -59,7 +74,6 @@ st.markdown(
     <style>
     .stApp { background-color: #000b17; }
     #MainMenu, footer, header { visibility: hidden; }
-    
     .formulario-card-box {
         background: rgba(13, 25, 33, 0.4);
         backdrop-filter: blur(15px);
@@ -67,22 +81,14 @@ st.markdown(
         border-radius: 20px;
         padding: 40px;
     }
-    
     h1 { color: #00EAFF !important; text-align: center; letter-spacing: 2px; }
-    
-    /* Estilizando o formulário do Streamlit para combinar */
-    [data-testid="stForm"] {
-        background: transparent !important;
-        border: none !important;
-    }
-    
+    [data-testid="stForm"] { background: transparent !important; border: none !important; }
     input, .stSelectbox div[data-baseweb="select"] {
         background: rgba(0, 20, 30, 0.6) !important;
         border: 1px solid #1a4a5a !important;
         color: #fff !important;
         border-radius: 8px !important;
     }
-    
     button[kind="primaryFormSubmit"] {
         background: transparent !important;
         border: 1px solid #00EAFF !important;
@@ -92,7 +98,6 @@ st.markdown(
         font-weight: bold;
         width: 100%;
     }
-    
     button[kind="primaryFormSubmit"]:hover {
         background: #00EAFF !important;
         color: #000b17 !important;
@@ -103,67 +108,80 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Wrapper Principal
+# --- LÓGICA DE ROTA ---
+query_params = st.query_params
+is_admin = query_params.get("admin") == "akyparfaitcoisas"
+
 st.markdown("<div class='formulario-card-box'>", unsafe_allow_html=True)
-st.markdown("<h1>REGISTRO DE PRESENÇA</h1>", unsafe_allow_html=True)
 
-# --- LÓGICA DE GEOLOCALIZAÇÃO ---
-if MODO_TESTE == "DESLIGADO":
-    loc = get_geolocation()
-    if not loc:
-        st.warning("Aguardando permissão de GPS...")
-        if st.button("🔄 TENTAR NOVAMENTE"):
-            st.rerun()
-        st.stop()
-
-    distancia = calcular_distancia(
-        loc["coords"]["latitude"],
-        loc["coords"]["longitude"],
-        LAT_FACULDADE,
-        LON_FACULDADE,
-    )
-
-    if distancia > RAIO_PERMITIDO_KM:
-        st.error(
-            f"❌ Você precisa ir até o local do evento para marcar sua presença :) (Distância: {distancia:.2f} km)"
-        )
-        st.stop()
+if is_admin:
+    st.title("🔒 Painel Administrativo")
+    senha = st.text_input("Senha", type="password")
+    if senha == "SUA_SENHA_AQUI":
+        if st.button("Gerar Relatório JSON"):
+            dados_organizados = buscar_e_organizar_dados()
+            json_str = json.dumps(dados_organizados, indent=4, ensure_ascii=False)
+            st.download_button(
+                "Baixar presencas.json", json_str, "presencas.json", "application/json"
+            )
+            st.json(dados_organizados)
     else:
-        st.success("✅ Localização confirmada!")
-
-# --- FORMULÁRIO ---
-with st.form("form_registro", clear_on_submit=True):
-    nome = st.text_input("NOME COMPLETO")
-    cpf_input = st.text_input("CPF (APENAS OS 11 NÚMEROS)", max_chars=11)
-    col1, col2 = st.columns(2)
-    with col1:
-        curso = st.selectbox("CURSO", CURSOS)
-        periodo = st.selectbox("PERÍODO", ["Matutino", "Noturno"])
-    with col2:
-        semestre = st.selectbox("SEMESTRE", SEMESTRES)
-        turma = st.text_input("TURMA (OPCIONAL)")
-
-    if st.form_submit_button("REGISTRAR PRESENÇA"):
-        cpf_limpo = formatar_cpf(cpf_input)
-        if not nome or not cpf_input:
-            st.warning("Por favor, preencha o Nome e o CPF!")
-        elif not cpf_limpo:
-            st.error("CPF Inválido!")
+        st.warning("Senha incorreta.")
+else:
+    # --- PÁGINA DO ALUNO ---
+    st.markdown("<h1>REGISTRO DE PRESENÇA</h1>", unsafe_allow_html=True)
+    if MODO_TESTE == "DESLIGADO":
+        loc = get_geolocation()
+        if not loc:
+            st.warning("Aguardando permissão de GPS...")
+            if st.button("🔄 TENTAR NOVAMENTE"):
+                st.rerun()
+            st.stop()
+        distancia = calcular_distancia(
+            loc["coords"]["latitude"],
+            loc["coords"]["longitude"],
+            LAT_FACULDADE,
+            LON_FACULDADE,
+        )
+        if distancia > RAIO_PERMITIDO_KM:
+            st.error(
+                f"❌ Você precisa ir até o local do evento para marcar sua presença :) (Distância: {distancia:.2f} km)"
+            )
+            st.stop()
         else:
-            try:
-                dados = {
-                    "nome_completo": nome.strip().upper(),
-                    "cpf": cpf_limpo,
-                    "curso": curso,
-                    "semestre": semestre,
-                    "turma": turma.strip().upper() if turma else "N/A",
-                    "periodo": periodo,
-                }
-                supabase.table("presencas").insert(dados).execute()
-                st.success(f"Tudo certo, {nome.split()[0]}!")
-                st.balloons()
-            except Exception as e:
-                st.error("⚠️ Você já registrou presença hoje!")
+            st.success("✅ Localização confirmada!")
 
-st.markdown("</div>", unsafe_allow_html=True)  # Fecha card-box
+    with st.form("form_registro", clear_on_submit=True):
+        nome = st.text_input("NOME COMPLETO")
+        cpf_input = st.text_input("CPF (APENAS OS 11 NÚMEROS)", max_chars=11)
+        col1, col2 = st.columns(2)
+        with col1:
+            curso = st.selectbox("CURSO", CURSOS)
+            periodo = st.selectbox("PERÍODO", ["Matutino", "Noturno"])
+        with col2:
+            semestre = st.selectbox("SEMESTRE", SEMESTRES)
+            turma = st.text_input("TURMA (OPCIONAL)")
 
+        if st.form_submit_button("REGISTRAR PRESENÇA"):
+            cpf_limpo = formatar_cpf(cpf_input)
+            if not nome or not cpf_input:
+                st.warning("Por favor, preencha o Nome e o CPF!")
+            elif not cpf_limpo:
+                st.error("CPF Inválido!")
+            else:
+                try:
+                    dados = {
+                        "nome_completo": nome.strip().upper(),
+                        "cpf": cpf_limpo,
+                        "curso": curso,
+                        "semestre": semestre,
+                        "turma": turma.strip().upper() if turma else "N/A",
+                        "periodo": periodo,
+                    }
+                    supabase.table("presencas").insert(dados).execute()
+                    st.success(f"Tudo certo, {nome.split()[0]}!")
+                    st.balloons()
+                except Exception:
+                    st.error("⚠️ Você já registrou presença hoje!")
+
+st.markdown("</div>", unsafe_allow_html=True)
