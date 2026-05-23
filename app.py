@@ -5,8 +5,6 @@ import re
 import math
 from streamlit_js_eval import get_geolocation
 
-# type: ignore
-
 # --- CONFIGURAÇÕES DE SEGURANÇA ---
 URL = os.getenv("SUPABASE_URL")
 KEY = os.getenv("SUPABASE_KEY")
@@ -169,36 +167,3 @@ with st.form("form_registro", clear_on_submit=True):
 
 st.markdown("</div>", unsafe_allow_html=True)  # Fecha card-box
 
-
-def gerar_relatorio_presencas():
-    # 1. Buscar todos os registros do Supabase
-    response = supabase.table("presencas").select("*").execute()
-    dados = response.data
-
-    # 2. Criar um dicionário agrupador
-    relatorio = {}
-
-    for item in dados:
-        # Criamos uma "chave" única baseada no curso, período e semestre
-        chave = f"{item['curso']} - {item['periodo']} {item['semestre']}"  # type: ignore
-
-        if chave not in relatorio:
-            relatorio[chave] = []
-
-        relatorio[chave].append(item["nome_completo"])  # type: ignore
-
-    # 3. Ordenar os nomes dentro de cada grupo
-    for chave in relatorio:
-        relatorio[chave].sort()
-
-    return relatorio
-
-
-# --- Exibição no Streamlit ---
-if st.sidebar.button("Gerar Relatório de Presença"):
-    dados_agrupados = gerar_relatorio_presencas()
-
-    for grupo, nomes in sorted(dados_agrupados.items()):
-        st.subheader(grupo)
-        for nome in nomes:
-            st.write(f"- {nome}")
